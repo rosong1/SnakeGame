@@ -1,6 +1,8 @@
 # Snake Game 🐍🎮
 
 ## TODO
-- random food
-- debug panel
-- gameover
+- switch debug panel
+- speed config
+- obstacle
+- difficulty level
+- code optimization

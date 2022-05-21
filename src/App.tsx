@@ -1,6 +1,5 @@
 import "./Grid.less";
 import React from "react";
-
 type TGridDataItem = { x: number; y: number; value: EGridStatus };
 
 const ROW = 25;
@@ -145,7 +144,7 @@ function App() {
     if ([EGameStatus.stop, EGameStatus.over].includes(nextGameStatus)) {
       return console.log("game", nextGameStatus);
     }
-    
+
     let nextHead: TGridDataItem = snake[0];
     switch (nextDirection) {
       case "w":
@@ -187,23 +186,30 @@ function App() {
 
   const handleKeyDown = (e: KeyboardEvent) => {
     const validKey = ["w", "d", "s", "a", " "];
-    if (!validKey.includes(e.key)) return;
+    const eKey =
+      {
+        ArrowUp: "w",
+        ArrowRight: "d",
+        ArrowDown: "s",
+        ArrowLeft: "a",
+      }[e.key] || e.key;
+    if (!validKey.includes(eKey)) return;
 
     const handleDirection = () => {
-      if (direction === e.key) {
+      if (direction === eKey) {
         return console.log("repeat");
       }
       if ([EGameStatus.over].includes(gameStatus)) {
         return;
       }
-      setDirection(e.key);
+      setDirection(eKey);
       if (gameStatus !== EGameStatus.over) {
         setGameStatus(EGameStatus.running);
-        snakeRun(EGameStatus.running, e.key);
+        snakeRun(EGameStatus.running, eKey);
       }
     };
 
-    switch (e.key) {
+    switch (eKey) {
       case "w":
         if (direction === "s") return;
         break;
@@ -241,14 +247,16 @@ function App() {
   }, [gridData, snake, gameStatus]);
 
   return (
-    <div style={{ color: "white" }} className="app">
-      <p>{direction}</p>
-      <p style={{ margin: 10 }}>{gameStatus}</p>
-
+    <div className="app">
+      <div className="debug-panel">
+        <p>direction: {direction}</p>
+        <p>gameStatus: {gameStatus}</p>
+        <p>eat: {snake.length - 3}</p>
+      </div>
+      {gameStatus === EGameStatus.over && (
+        <p className="game-over-wrap">game over</p>
+      )}
       <div className="grid-wrap" style={{ maxWidth: 12 * COL }}>
-        {gameStatus === EGameStatus.over && (
-          <p style={{ position: "absolute", color: "red" }}>game over</p>
-        )}
         {merge({
           gridData,
           effectData: snake.concat(food),
@@ -257,7 +265,6 @@ function App() {
             <React.Fragment key={rowKey}>
               {row.map((item, colKey) => (
                 <div
-                  // title={`${v}-${rowKey}-${colKey}`}
                   key={`${colKey}-${item.value}`}
                   className={classnames("grid-item", {
                     green:
