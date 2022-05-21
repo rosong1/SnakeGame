@@ -1,8 +1,10 @@
 import "./Grid.less";
 import React from "react";
-const ROW = 25;
-const COL = 50;
 
+type TGridDataItem = { x: number; y: number; value: EGridStatus };
+
+const ROW = 25;
+const COL = 20;
 const classnames = (...args: any[]): string => {
   const isEmpty = (v: any) => [undefined, null, 0, "", false].includes(v);
   return args.reduce((acc, cur) => {
@@ -37,70 +39,142 @@ enum EGameStatus {
 }
 
 const createGridData = () => {
-  const data = Array.from({ length: ROW })
-    .fill(Array.from({ length: COL }).fill(EGridStatus.empty))
-    .map((v) => [...v]);
-  return data;
+  const result: TGridDataItem[][] = [];
+  for (let i = 0; i < ROW; i++) {
+    result[i] = [];
+    for (let j = 0; j < COL; j++) {
+      result[i].push({ x: j, y: i, value: EGridStatus.empty });
+    }
+  }
+  return result;
 };
 
 const gridData = createGridData();
-const checkIsDead = (dataSource: { x: number; y: number }) => {
+const checkIsDead = ({
+  dataSource,
+  effectData,
+}: {
+  dataSource: TGridDataItem;
+  effectData: TGridDataItem[];
+}) => {
   return (
     dataSource.x >= COL ||
     dataSource.y >= ROW ||
     dataSource.x < 0 ||
-    dataSource.y < 0
+    dataSource.y < 0 ||
+    effectData.some(
+      (item) => item.x === dataSource.x && item.y === dataSource.y
+    )
   );
 };
+
+const createRandomFood = ({
+  gridData,
+  effectData,
+}: {
+  gridData: TGridDataItem[][];
+  effectData: TGridDataItem[];
+}) => {
+  const effectDataMap = effectData.reduce((acc, cur) => {
+    if (!acc[cur.y]) acc[cur.y] = [];
+    acc[cur.y].push(cur);
+    return acc;
+  }, {} as { [key: number]: TGridDataItem[] });
+  const filteredData = gridData
+    .map((row, i) => {
+      if (!effectDataMap[i]) return row;
+      return row.filter((colItem) => {
+        const matchItem = effectDataMap[i].find(
+          (effectItem) => effectItem.x === colItem.x
+        );
+        return !matchItem;
+      });
+    })
+    .flat();
+
+  const result = {
+    ...filteredData[(filteredData.length * Math.random()) | 0],
+    value: EGridStatus.food,
+  };
+  return result;
+};
+
+const defaultSnake = [
+  { x: COL / 2, y: (ROW / 2) | 0, value: EGridStatus.snake },
+  { x: COL / 2, y: ((ROW / 2) | 0) + 1, value: EGridStatus.snake },
+  { x: COL / 2, y: ((ROW / 2) | 0) + 2, value: EGridStatus.snake },
+];
+
+const defaultFood = createRandomFood({
+  gridData,
+  effectData: defaultSnake,
+});
+
 function App() {
-  const [snake, setSnake] = React.useState([
-    { x: 24, y: 12 },
-    { x: 24, y: 13 },
-    { x: 24, y: 14 },
-  ]);
+  const [snake, setSnake] = React.useState(defaultSnake);
+  const [food, setFood] = React.useState(defaultFood);
   const [direction, setDirection] = React.useState("w");
   const [gameStatus, setGameStatus] = React.useState(EGameStatus.stop);
 
-  const merge = ({ effectData, value, gridData }) => {
+  const merge = ({
+    gridData,
+    effectData,
+  }: {
+    gridData: TGridDataItem[][];
+    effectData: TGridDataItem[];
+  }) => {
     const effectDataMap = effectData.reduce((acc, cur) => {
       if (!acc[cur.y]) acc[cur.y] = [];
-      acc[cur.y].push(cur.x);
+      acc[cur.y].push(cur);
       return acc;
-    }, {});
-    return gridData.map((row, i) => {
+    }, {} as { [key: number]: TGridDataItem[] });
+
+    const mergedData = gridData.map((row, i) => {
       if (!effectDataMap[i]) return row;
-      const nextRow = [...row];
-      effectDataMap[i].forEach((x) => (nextRow[x] = value));
-      return nextRow;
+      return row.map((colItem) => {
+        const matchItem = effectDataMap[i].find(
+          (effectItem) => effectItem.x === colItem.x
+        );
+        return matchItem ? matchItem : colItem;
+      });
     });
+    return mergedData;
   };
 
   const snakeRun = (nextGameStatus = gameStatus, nextDirection = direction) => {
     if ([EGameStatus.stop, EGameStatus.over].includes(nextGameStatus)) {
       return console.log("game", nextGameStatus);
     }
-    let nextHead = null as any;
+    
+    let nextHead: TGridDataItem = snake[0];
     switch (nextDirection) {
       case "w":
-        nextHead = { x: snake[0].x, y: snake[0].y - 1 };
+        nextHead = { ...snake[0], x: snake[0].x, y: snake[0].y - 1 };
         break;
       case "d":
-        nextHead = { x: snake[0].x + 1, y: snake[0].y };
+        nextHead = { ...snake[0], x: snake[0].x + 1, y: snake[0].y };
         break;
 
       case "s":
-        nextHead = { x: snake[0].x, y: snake[0].y + 1 };
+        nextHead = { ...snake[0], x: snake[0].x, y: snake[0].y + 1 };
         break;
 
       case "a":
-        nextHead = { x: snake[0].x - 1, y: snake[0].y };
+        nextHead = { ...snake[0], x: snake[0].x - 1, y: snake[0].y };
         break;
     }
 
-    if (checkIsDead(nextHead)) {
+    if (checkIsDead({ dataSource: nextHead, effectData: snake })) {
       return setGameStatus(EGameStatus.over);
     }
-    setSnake([nextHead].concat(snake.slice(0, snake.length - 1)));
+    const isMatchFood = nextHead.x === food.x && nextHead.y === food.y;
+    if (isMatchFood) {
+      const nextSnake = [nextHead].concat(snake);
+      setSnake(nextSnake);
+      setFood(createRandomFood({ effectData: nextSnake, gridData }));
+    } else {
+      setSnake([nextHead].concat(snake.slice(0, snake.length - 1)));
+    }
   };
 
   React.useEffect(() => {
@@ -112,16 +186,22 @@ function App() {
   }, [snake, gameStatus, direction]);
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (direction === e.key) {
-      return console.log("repeat");
-    }
-
-    if ([EGameStatus.over].includes(gameStatus)) {
-      return console.log("game", gameStatus);
-    }
-
-    const validKey = ["w", "d", "s", "a"];
+    const validKey = ["w", "d", "s", "a", " "];
     if (!validKey.includes(e.key)) return;
+
+    const handleDirection = () => {
+      if (direction === e.key) {
+        return console.log("repeat");
+      }
+      if ([EGameStatus.over].includes(gameStatus)) {
+        return;
+      }
+      setDirection(e.key);
+      if (gameStatus !== EGameStatus.over) {
+        setGameStatus(EGameStatus.running);
+        snakeRun(EGameStatus.running, e.key);
+      }
+    };
 
     switch (e.key) {
       case "w":
@@ -138,13 +218,21 @@ function App() {
       case "a":
         if (direction === "d") return;
         break;
+      case " ": {
+        if (gameStatus === EGameStatus.over) {
+          return location.reload();
+        }
+        if (gameStatus === EGameStatus.stop) {
+          setGameStatus(EGameStatus.running);
+          snakeRun(EGameStatus.running, direction);
+        } else {
+          setGameStatus(EGameStatus.stop);
+        }
+        return;
+      }
     }
 
-    setDirection(e.key);
-    if (gameStatus !== EGameStatus.over) {
-      setGameStatus(EGameStatus.running);
-      snakeRun(EGameStatus.running, e.key);
-    }
+    handleDirection();
   };
 
   React.useEffect(() => {
@@ -157,26 +245,30 @@ function App() {
       <p>{direction}</p>
       <p style={{ margin: 10 }}>{gameStatus}</p>
 
-      <div className="grid-wrap">
+      <div className="grid-wrap" style={{ maxWidth: 12 * COL }}>
         {gameStatus === EGameStatus.over && (
           <p style={{ position: "absolute", color: "red" }}>game over</p>
         )}
         {merge({
           gridData,
-          effectData: snake,
-          value: EGridStatus.snake,
-        })
-          .flat()
-          .map((v, i) => {
-            return (
-              <div
-                key={`${i}-${v}`}
-                className={classnames("grid-item", {
-                  green: v === EGridStatus.snake,
-                })}
-              />
-            );
-          })}
+          effectData: snake.concat(food),
+        }).map((row, rowKey) => {
+          return (
+            <React.Fragment key={rowKey}>
+              {row.map((item, colKey) => (
+                <div
+                  // title={`${v}-${rowKey}-${colKey}`}
+                  key={`${colKey}-${item.value}`}
+                  className={classnames("grid-item", {
+                    green:
+                      item.value === EGridStatus.snake ||
+                      item.value === EGridStatus.food,
+                  })}
+                />
+              ))}
+            </React.Fragment>
+          );
+        })}
       </div>
     </div>
   );
